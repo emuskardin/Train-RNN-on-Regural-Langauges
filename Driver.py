@@ -26,6 +26,7 @@ experiments = {'tomita3': get_tomita(3),
 # 'cpu' to train on cpu, 'gpu' to train on cuda:0
 device = 'cpu'
 
+# to use preloaded automata
 exp_name = 'tomita3'
 automaton = experiments[exp_name]
 
@@ -85,8 +86,7 @@ model.get_model_name(exp_name)
 # If trained model with same parametrization exists, it will be loaded unless load flag is set to False
 opt.train(train, val, n_epochs=n_epochs, exp_name=exp_name, early_stop=early_stop, save=True, load=True)
 
-# Extraction process
-
+# Extraction process - from RNN to regular language
 sul = RNNSul(model)
 
 eq_oracle = RandomWMethodEqOracle(input_al, sul, walks_per_state=200, walk_len=10)

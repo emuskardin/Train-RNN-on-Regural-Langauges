@@ -1,4 +1,4 @@
-# Train RNN to recognize regular languages
+# Train RNNs to recognize regular languages
 
 This repository contains minimal code which can be used to train RNN (plain, GRU, LSTM) to recognize regular languages.
 It also provides a method of extracting regular languages form trained RNNs using active automata learning.
@@ -14,7 +14,7 @@ pip3 install torch==1.10.1+cu102 -f https://download.pytorch.org/whl/cu102/torch
 To visualize finite state machines, ensure that Graphviz is installed on your system.
 
 ## Run Training
-To run training, simply configure to your wishes and run the `Driver.py` script.
+To run the training, simply configure to your wishes and run the `Driver.py` script.
 
 In it, you can train a RNN that will try to learn the input-output behaviour of the regular language.
 You can change the regular language that is to be learned, RNN type, and other (hyper)parameters. 
