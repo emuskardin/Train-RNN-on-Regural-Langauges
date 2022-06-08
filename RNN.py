@@ -69,14 +69,17 @@ class RecurrentNN(nn.Module):
             self.cs = torch.zeros(self.layer_dim, 1, self.hidden_dim).to(self.device)
 
     def step(self, inp, return_hidden=False):
-        inp = tuple([inp])
-        inp = self.data_handler.input_tensor(inp, len(inp))
-        inp.unsqueeze_(1)
+        if inp is not None:
+            inp = tuple([inp])
+            inp = self.data_handler.input_tensor(inp, len(inp))
+            inp.unsqueeze_(1)
 
-        if self.model_type == 'lstm':
-            out, (self.hs, self.cs) = self.rnn(inp, (self.hs, self.cs))
+            if self.model_type == 'lstm':
+                out, (self.hs, self.cs) = self.rnn(inp, (self.hs, self.cs))
+            else:
+                out, self.hs = self.rnn(inp, self.hs)
         else:
-            out, self.hs = self.rnn(inp, self.hs)
+            out = self.hs[-1]
 
         out = self.fc(out)
         out.squeeze_()
@@ -108,6 +111,7 @@ class Optimization:
         self.optimizer = optimizer
         self.train_losses = []
         self.val_losses = []
+        self.accuracy = []
         if device is None:
             self.device = torch.device('cuda:0' if device != 'cpu' and torch.cuda.is_available() else "cpu")
         else:
@@ -119,7 +123,6 @@ class Optimization:
         yhat = self.model(x)
 
         # squeeze only one dimension -> squeeze_() would squeeze two if batch size is equal to 1
-        # TODO check this wrt batch size
         if y.shape[0] == 1:
             y = y.squeeze(0)
         else:
@@ -140,8 +143,10 @@ class Optimization:
 
     def train(self, train_set, val_set, n_epochs=50, early_stop=False, exp_name='exp',
               save_interval=0, verbose=True, save=True, load=True):
+
         self.model.get_model_name(exp_name)
-        model_path = f'trained_rnns/{self.model.model_name}'
+        model_path = f'trained_rnns/{self.model.model_name}.pt'
+        # model_path = self.model.model_name
 
         if load and self.load(model_path):
             if verbose:
@@ -154,6 +159,7 @@ class Optimization:
             for x_batch, y_batch in train_set:
                 x_batch = x_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
+
                 loss = self.train_step(x_batch, y_batch)
                 batch_losses.append(loss)
             training_loss = np.mean(batch_losses)
@@ -163,41 +169,57 @@ class Optimization:
                 self.model.eval()
                 batch_val_losses = []
 
+                total, correct = 0, 0
                 for x_val, y_val in val_set:
                     y_val = y_val.to(self.device)
                     # squeeze only one dimension -> squeeze_() would squeeze two if batch size is equal to 1
-                    # TODO check this wrt batch size
                     if y_val.shape[0] == 1:
                         y_val = y_val.squeeze(0)
                     else:
                         y_val.squeeze_()
 
-                    yhat = self.model(x_val)
-                    val_loss = self.loss_fn(yhat, y_val).item()
+                    predictions = self.model(x_val)
+                    val_loss = self.loss_fn(predictions, y_val).item()
+
+                    _, predicted = predictions.max(1)
+                    total += predictions.size(0)
+                    correct += predicted.eq(y_val).sum().item()
+
                     y_val.unsqueeze_(1)
                     batch_val_losses.append(val_loss)
 
                 validation_loss = np.mean(batch_val_losses)
                 self.val_losses.append(validation_loss)
 
+                validation_set_accuracy = 100. * correct / total
+                self.accuracy.append(validation_set_accuracy)
+
             if (epoch <= 10) | (epoch % 5 == 0) and verbose:
                 print(
-                    f"[{epoch}/{n_epochs}] Training loss: {training_loss:.4f}\t Validation loss: {validation_loss:.4f}")
+                    f"[{epoch}/{n_epochs}] "
+                    f"Training loss: {training_loss:.4f}\t "
+                    f"Validation loss: {validation_loss:.4f}\t "
+                    f"Accuracy: {validation_set_accuracy:.2f}%")
 
             if save_interval > 0 and epoch % save_interval == 0:
                 torch.save(self.model.state_dict(), f'{model_path}_epoch_{epoch}')
 
-            if early_stop and mean(self.train_losses[-5:]) < 0.00001 and mean(self.val_losses[-5:]) < 0.00001 and verbose:
-                print('Early Stopping based on Patience')
-                break
+            if early_stop:
+                if mean(self.train_losses[-3:]) < 0.00001 and mean(self.val_losses[-3:]) < 0.00001 or mean(self.accuracy[-3:]) == 100.0:
+                    if verbose:
+                        print('Early Stopping based on Patience')
+                        break
 
         if save:
             torch.save(self.model.state_dict(), model_path)
+
+        self.model.eval()
 
     def load(self, path):
         file = Path(path)
         if file.is_file():
             self.model.load_state_dict(torch.load(path))
+            self.model.eval()
             return True
         return False
 
