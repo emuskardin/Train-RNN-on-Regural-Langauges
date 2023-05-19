@@ -44,7 +44,11 @@ def get_tomita(tomita_num):
 def generate_data_from_automaton(automaton, num_examples, lens=None, classify_states=False):
     input_al = automaton.get_input_alphabet()
     if isinstance(automaton, MealyMachine):
-        output_al = {output for state in automaton.states for output in state.output_fun.values()}
+        output_al = list({output for state in automaton.states for output in state.output_fun.values()})
+        output_al.sort()
+    elif isinstance(automaton, MooreMachine):
+        output_al = list(set([state.output for state in automaton.states]))
+        output_al.sort()
     else:
         output_al = [False, True]
     if classify_states:
